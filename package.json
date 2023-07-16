@@ -1,0 +1,17 @@
+{
+  "scripts": {
+    "start": "node -r @swc-node/register src/index.ts"
+  },
+  "dependencies": {
+    "@swc-node/register": "^1.6.6",
+    "@swc/core": "^1.3.69",
+    "@types/inquirer": "^8",
+    "@types/node-fetch": "^2",
+    "chalk": "^4",
+    "ethers": "^5.7.2",
+    "inquirer": "^8",
+    "node-fetch": "^2",
+    "typescript": "^5.1.6",
+    "zklink-js-sdk": "1.0.0"
+  }
+}
