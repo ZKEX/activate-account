@@ -1,18 +1,13 @@
-import { JsonRpcProvider } from '@ethersproject/providers'
 import { Wallet as Web3Wallet } from '@ethersproject/wallet'
 import chalk from 'chalk'
-import inquirer from 'inquirer'
 import fetch from 'node-fetch'
 import { Wallet } from 'zklink-js-sdk'
 import { sleep } from 'zklink-js-sdk/build/utils'
-import secret from '../.secret.json'
-
-const { zklinkEndpoint, privateKey } = secret
-
-const chainId = secret.chainId
-const provider = new JsonRpcProvider(secret.web3Rpc)
+import { privateKey, zklinkEndpoint } from './config'
 
 async function checkAccountState(address: string) {
+  console.log(chalk.blueBright(`Check account status:`), address)
+
   while (true) {
     const accountState = await fetchAccountState(address)
     if (accountState?.error) {
@@ -27,68 +22,57 @@ async function checkAccountState(address: string) {
   }
 }
 
-async function fetchAccountState(address: string) {
+async function getFeeTokenId(accountId: number) {
+  console.log(chalk.blueBright('Check account balance: accountId='), accountId)
+  while (true) {
+    const { error, result } = await fetchAccountBalances(accountId)
+    console.log(
+      chalk.blueBright('Account balance:'),
+      JSON.stringify({ error, result })
+    )
+    if (error?.message) {
+      console.log(chalk.red(`[ERROR] ${error.message}`))
+    }
+    if (result) {
+      if (result['0']) {
+        return Number(Object.keys(result['0'])[0])
+      } else {
+        console.log(chalk.red(`[ERROR] Cannot find balance on account 0`))
+      }
+    }
+    await sleep(1000)
+  }
+}
+
+async function zklinkRpc(method: string, params: any[]) {
   return fetch(zklinkEndpoint, {
     method: 'POST',
     body: JSON.stringify({
       jsonrpc: '2.0',
-      method: 'getAccount',
-      params: [address],
+      method,
+      params,
       id: 1,
     }),
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
     },
   }).then((r) => r.json())
+}
+
+async function fetchAccountState(address: string) {
+  return zklinkRpc('getAccount', [address])
 }
 
 async function fetchAccountBalances(id: number) {
-  return fetch(zklinkEndpoint, {
-    method: 'POST',
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      method: 'getAccountBalances',
-      params: [id],
-      id: 1,
-    }),
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-    },
-  })
-    .then((r) => r.json())
-    .then((r) => r.result)
+  return zklinkRpc('getAccountBalances', [id])
 }
 
-async function fetchSupportChains() {
-  return fetch(zklinkEndpoint, {
-    method: 'POST',
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      method: 'getSupportChains',
-      params: [],
-      id: 1,
-    }),
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-    },
-  })
-    .then((r) => r.json())
-    .then((r) => r.result)
+async function fetchChangePubkeyChainId() {
+  return zklinkRpc('getChangePubkeyChainId', []).then((r) => r.result)
 }
 
 async function fetchTransactionByHash(hash: string) {
-  return fetch(zklinkEndpoint, {
-    method: 'POST',
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      method: 'getTransactionByHash',
-      params: [hash, false],
-      id: 1,
-    }),
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-    },
-  }).then((r) => r.json())
+  return zklinkRpc('getTransactionByHash', [hash, false])
 }
 
 async function watchTransaction(hash: string) {
@@ -106,36 +90,13 @@ async function watchTransaction(hash: string) {
   }
 }
 
-export async function promptActivate() {
-  const answers = await inquirer.prompt([
-    {
-      type: 'confirm',
-      name: 'action',
-      message: `Activate account now?`,
-    },
-  ])
-  return answers.action
-}
-
 export async function sendActiveTransaction(signedData: any) {
-  return fetch(zklinkEndpoint, {
-    method: 'POST',
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      method: 'sendTransaction',
-      params: [signedData.tx, null, null],
-      id: 1,
-    }),
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-    },
-  }).then((r) => r.json())
+  return zklinkRpc('sendTransaction', [signedData.tx, null, null])
 }
 
 async function main() {
-  const web3Wallet = new Web3Wallet(privateKey, provider)
+  const web3Wallet = new Web3Wallet(privateKey)
   const { address } = web3Wallet
-  console.log(chalk.green(`Wallet address:`), address)
 
   const zkLinkWallet = await Wallet.fromEthSigner(web3Wallet)
 
@@ -151,31 +112,22 @@ async function main() {
     process.exit(0)
   }
 
-  const prompt = await promptActivate()
+  const feeTokenId = await getFeeTokenId(accountState.id)
 
-  if (!prompt) return
-  const supportChains: { layerOneChainId: number; mainContract: string }[] =
-    await fetchSupportChains()
-  const { mainContract } =
-    supportChains.find((v) => Number(v.layerOneChainId) === Number(chainId)) ??
-    {}
-
-  if (!mainContract) {
-    throw new Error(`polygon's contract address not found.`)
+  if (!feeTokenId) {
+    console.log(chalk.red(`Cannot find available fee token on account 0`))
+    process.exit(0)
   }
-  const balances = await fetchAccountBalances(accountState.id)
 
-  const feeTokenId: number = Number(Object.keys(balances['0'])[0])
+  const changePubkeyChainId = await fetchChangePubkeyChainId()
 
   const signedData = await zkLinkWallet.signChangePubKey({
     accountId: accountState.id,
     subAccountId: 0,
-    chainId: 1,
+    chainId: changePubkeyChainId,
     ethAuthType: 'EthECDSA',
     feeTokenId,
     fee: '0',
-    layerOneChainId: chainId,
-    mainContract,
     nonce: accountState.nonce,
   })
 
@@ -186,7 +138,7 @@ async function main() {
     process.exit(1)
   }
   if (tx?.result) {
-    console.log(chalk.green(`Transaction sened, tx hash: `), tx?.result)
+    console.log(chalk.green(`Transaction sended, tx hash: `), tx?.result)
   }
   const txResult = await watchTransaction(tx?.result)
   if (txResult.receipt.success === false) {

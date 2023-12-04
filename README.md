@@ -1,30 +1,13 @@
 # Activate Layer2 Account Assistant
 
-#### Create Key File
+#### Set Private Key
 
-Create `.secret.json` in the project root directory and fill in the following data:
-
-`chainId`: Mainnet Chain ID
-
-`web3Rpc`: Mainnet RPC node
-
-`zklinkEndpoint`: Layer2 RPC internal network address
-
-`privateKey`: Wallet private key
-
-```json
-{
-  "chainId": 137,
-  "web3Rpc": "https://polygon.llamarpc.com",
-  "zklinkEndpoint": "...",
-  "privateKey": "..."
-}
-```
+Modify the `PRIVATE_KEY` field in the corresponding environment configuration file, and fill in the private key of the wallet that needs to be activated.
 
 #### Install Dependencies and Start the Service
 
 ```shell
 yarn
 
-yarn start
+yarn start:testnet
 ```

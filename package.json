@@ -1,6 +1,8 @@
 {
   "scripts": {
-    "start": "node -r @swc-node/register src/index.ts"
+    "start:devnet": "cross-env APP_ENV=devnet node -r @swc-node/register src/index.ts",
+    "start:testnet": "cross-env APP_ENV=testnet node -r @swc-node/register src/index.ts",
+    "start:mainnet": "cross-env APP_ENV=mainnet node -r @swc-node/register src/index.ts"
   },
   "dependencies": {
     "@swc-node/register": "^1.6.6",
@@ -8,10 +10,12 @@
     "@types/inquirer": "^8",
     "@types/node-fetch": "^2",
     "chalk": "^4",
+    "cross-env": "^7.0.3",
+    "dotenv": "^16.3.1",
     "ethers": "^5.7.2",
     "inquirer": "^8",
     "node-fetch": "^2",
     "typescript": "^5.1.6",
-    "zklink-js-sdk": "1.0.0"
+    "zklink-js-sdk": "^2.1.1"
   }
 }
